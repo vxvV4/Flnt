@@ -1,4 +1,3 @@
--- i will rewrite this someday
 local UserInputService = game:GetService("UserInputService")
 local Mouse = game:GetService("Players").LocalPlayer:GetMouse()
 local Camera = game:GetService("Workspace").CurrentCamera
@@ -14,6 +13,11 @@ local Spring = Flipper.Spring.new
 local Instant = Flipper.Instant.new
 local New = Creator.New
 
+-- Pixel-perfect rounding helper
+local function PixelRound(value)
+	return math.floor(value + 0.5)
+end
+
 return function(Config)
 	local Library = require(Root)
 
@@ -24,8 +28,8 @@ return function(Config)
 		CurrentPos = 0,
 		TabWidth = 0,
 		Position = UDim2.fromOffset(
-			Camera.ViewportSize.X / 2 - Config.Size.X.Offset / 2,
-			Camera.ViewportSize.Y / 2 - Config.Size.Y.Offset / 2
+			PixelRound(Camera.ViewportSize.X / 2 - Config.Size.X.Offset / 2),
+			PixelRound(Camera.ViewportSize.Y / 2 - Config.Size.Y.Offset / 2)
 		),
 	}
 
@@ -154,18 +158,26 @@ return function(Config)
 	Window.ContainerBackMotor = Flipper.SingleMotor.new(0)
 	Window.ContainerPosMotor = Flipper.SingleMotor.new(94)
 
+	-- Pixel-perfect size updates
 	SizeMotor:onStep(function(values)
-		Window.Root.Size = UDim2.new(0, values.X, 0, values.Y)
+		Window.Root.Size = UDim2.fromOffset(
+			PixelRound(values.X),
+			PixelRound(values.Y)
+		)
 	end)
 
+	-- Pixel-perfect position updates
 	PosMotor:onStep(function(values)
-		Window.Root.Position = UDim2.new(0, values.X, 0, values.Y)
+		Window.Root.Position = UDim2.fromOffset(
+			PixelRound(values.X),
+			PixelRound(values.Y)
+		)
 	end)
 
 	local LastValue = 0
 	local LastTime = 0
 	Window.SelectorPosMotor:onStep(function(Value)
-		Selector.Position = UDim2.new(0, 0, 0, Value + 17)
+		Selector.Position = UDim2.fromOffset(0, PixelRound(Value + 17))
 		local Now = tick()
 		local DeltaTime = Now - LastTime
 
@@ -177,7 +189,7 @@ return function(Config)
 	end)
 
 	Window.SelectorSizeMotor:onStep(function(Value)
-		Selector.Size = UDim2.new(0, 4, 0, Value)
+		Selector.Size = UDim2.fromOffset(4, PixelRound(Value))
 	end)
 
 	Window.ContainerBackMotor:onStep(function(Value)
@@ -185,12 +197,12 @@ return function(Config)
 	end)
 
 	Window.ContainerPosMotor:onStep(function(Value)
-		Window.ContainerAnim.Position = UDim2.fromOffset(0, Value)
+		Window.ContainerAnim.Position = UDim2.fromOffset(0, PixelRound(Value))
 	end)
 
 	local OldSizeX
 	local OldSizeY
-	Window.Maximize = function(Value, NoPos, Instant)
+	Window.Maximize = function(Value, NoPos, InstantAnim)
 		Window.Maximized = Value
 		Window.TitleBar.MaxButton.Frame.Icon.Image = Value and Assets.Restore or Assets.Max
 
@@ -198,11 +210,14 @@ return function(Config)
 			OldSizeX = Window.Size.X.Offset
 			OldSizeY = Window.Size.Y.Offset
 		end
-		local SizeX = Value and Camera.ViewportSize.X or OldSizeX
-		local SizeY = Value and Camera.ViewportSize.Y or OldSizeY
+		
+		-- Pixel-perfect viewport sizing
+		local SizeX = Value and PixelRound(Camera.ViewportSize.X) or OldSizeX
+		local SizeY = Value and PixelRound(Camera.ViewportSize.Y) or OldSizeY
+		
 		SizeMotor:setGoal({
-			X = Flipper[Instant and "Instant" or "Spring"].new(SizeX, { frequency = 6 }),
-			Y = Flipper[Instant and "Instant" or "Spring"].new(SizeY, { frequency = 6 }),
+			X = Flipper[InstantAnim and "Instant" or "Spring"].new(SizeX, { frequency = 6 }),
+			Y = Flipper[InstantAnim and "Instant" or "Spring"].new(SizeY, { frequency = 6 }),
 		})
 		Window.Size = UDim2.fromOffset(SizeX, SizeY)
 
@@ -215,18 +230,15 @@ return function(Config)
 	end
 
 	Creator.AddSignal(Window.TitleBar.Frame.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
+		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			Dragging = true
 			MousePos = Input.Position
 			StartPos = Window.Root.Position
 
 			if Window.Maximized then
 				StartPos = UDim2.fromOffset(
-					Mouse.X - (Mouse.X * ((OldSizeX - 100) / Window.Root.AbsoluteSize.X)),
-					Mouse.Y - (Mouse.Y * (OldSizeY / Window.Root.AbsoluteSize.Y))
+					PixelRound(Mouse.X - (Mouse.X * ((OldSizeX - 100) / Window.Root.AbsoluteSize.X))),
+					PixelRound(Mouse.Y - (Mouse.Y * (OldSizeY / Window.Root.AbsoluteSize.Y)))
 				)
 			end
 
@@ -239,19 +251,13 @@ return function(Config)
 	end)
 
 	Creator.AddSignal(Window.TitleBar.Frame.InputChanged, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseMovement
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
+		if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
 			DragInput = Input
 		end
 	end)
 
 	Creator.AddSignal(ResizeStartFrame.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
+		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			Resizing = true
 			ResizePos = Input.Position
 		end
@@ -260,7 +266,11 @@ return function(Config)
 	Creator.AddSignal(UserInputService.InputChanged, function(Input)
 		if Input == DragInput and Dragging then
 			local Delta = Input.Position - MousePos
-			Window.Position = UDim2.fromOffset(StartPos.X.Offset + Delta.X, StartPos.Y.Offset + Delta.Y)
+			-- Pixel-perfect dragging
+			Window.Position = UDim2.fromOffset(
+				PixelRound(StartPos.X.Offset + Delta.X),
+				PixelRound(StartPos.Y.Offset + Delta.Y)
+			)
 			PosMotor:setGoal({
 				X = Instant(Window.Position.X.Offset),
 				Y = Instant(Window.Position.Y.Offset),
@@ -271,16 +281,16 @@ return function(Config)
 			end
 		end
 
-		if
-			(Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)
-			and Resizing
-		then
+		if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) and Resizing then
 			local Delta = Input.Position - ResizePos
 			local StartSize = Window.Size
 
 			local TargetSize = Vector3.new(StartSize.X.Offset, StartSize.Y.Offset, 0) + Vector3.new(1, 1, 0) * Delta
-			local TargetSizeClamped =
-				Vector2.new(math.clamp(TargetSize.X, 470, 2048), math.clamp(TargetSize.Y, 380, 2048))
+			-- Pixel-perfect resizing with clamping
+			local TargetSizeClamped = Vector2.new(
+				PixelRound(math.clamp(TargetSize.X, 470, 2048)),
+				PixelRound(math.clamp(TargetSize.Y, 380, 2048))
+			)
 
 			SizeMotor:setGoal({
 				X = Flipper.Instant.new(TargetSizeClamped.X),
@@ -292,20 +302,19 @@ return function(Config)
 	Creator.AddSignal(UserInputService.InputEnded, function(Input)
 		if Resizing == true or Input.UserInputType == Enum.UserInputType.Touch then
 			Resizing = false
-			Window.Size = UDim2.fromOffset(SizeMotor:getValue().X, SizeMotor:getValue().Y)
+			Window.Size = UDim2.fromOffset(
+				PixelRound(SizeMotor:getValue().X),
+				PixelRound(SizeMotor:getValue().Y)
+			)
 		end
 	end)
 
 	Creator.AddSignal(Window.TabHolder.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
-		Window.TabHolder.CanvasSize = UDim2.new(0, 0, 0, Window.TabHolder.UIListLayout.AbsoluteContentSize.Y)
+		Window.TabHolder.CanvasSize = UDim2.fromOffset(0, PixelRound(Window.TabHolder.UIListLayout.AbsoluteContentSize.Y))
 	end)
 
 	Creator.AddSignal(UserInputService.InputBegan, function(Input)
-		if
-			type(Library.MinimizeKeybind) == "table"
-			and Library.MinimizeKeybind.Type == "Keybind"
-			and not UserInputService:GetFocusedTextBox()
-		then
+		if type(Library.MinimizeKeybind) == "table" and Library.MinimizeKeybind.Type == "Keybind" and not UserInputService:GetFocusedTextBox() then
 			if Input.KeyCode.Name == Library.MinimizeKeybind.Value then
 				Window:Minimize()
 			end
@@ -363,11 +372,11 @@ return function(Config)
 			Parent = Dialog.Root,
 		})
 
-		Dialog.Root.Size = UDim2.fromOffset(Content.TextBounds.X + 40, 165)
+		Dialog.Root.Size = UDim2.fromOffset(PixelRound(Content.TextBounds.X + 40), 165)
 		if Content.TextBounds.X + 40 > Window.Size.X.Offset - 120 then
 			Dialog.Root.Size = UDim2.fromOffset(Window.Size.X.Offset - 120, 165)
 			Content.TextWrapped = true
-			Dialog.Root.Size = UDim2.fromOffset(Window.Size.X.Offset - 120, Content.TextBounds.Y + 150)
+			Dialog.Root.Size = UDim2.fromOffset(Window.Size.X.Offset - 120, PixelRound(Content.TextBounds.Y + 150))
 		end
 
 		for _, Button in next, Config.Buttons do
